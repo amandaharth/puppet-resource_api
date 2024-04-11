@@ -250,26 +250,33 @@ module Puppet::ResourceApi
       end
 
       def self.rsapi_provider_get(names = nil)
-        # If the cache has been marked as having all instances, then just return the
-        # full contents:
-        return rsapi_provider_get_cache.all if rsapi_provider_get_cache.cached_all? && names.nil?
-
-        fetched = if type_definition.feature?('simple_get_filter')
-                    my_provider.get(context, names)
-                  else
-                    my_provider.get(context)
-                  end
-
-        fetched.each do |resource_hash|
-          type_definition.check_schema(resource_hash)
-          rsapi_provider_get_cache.add(build_title(type_definition, resource_hash), resource_hash)
-        end
-
-        if names.nil? && !type_definition.feature?('simple_get_filter')
+        if rsapi_provider_get_cache.cached_all?
+        # If the cache has been marked as having all instances
+        # then just return the full contents:
+          return rsapi_provider_get_cache.all
+        else
+        # Otherwise, if the cache hasn't been marked as having all
+        # instances yet, fetch everything and add it all to the cache:
+          fetched = my_provider.get(context)
+          fetched.each do |resource_hash|
+            type_definition.check_schema(resource_hash)
+            rsapi_provider_get_cache.add(build_title(type_definition, resource_hash), resource_hash)
+          end
           # Mark the cache as having all possible instances:
           rsapi_provider_get_cache.cached_all
         end
-
+        
+        unless names.nil?
+          # If names is not nil and the complete cache wasn't returned
+          # call the provider's get function to get a specific resource's information
+          #fetched = rsapi_provider_get_cache.all.find { |h| namevar_match?(h) }
+          fetched = my_provider.get(context, names)
+          fetched.each do |resource_hash|
+            type_definition.check_schema(resource_hash)
+            rsapi_provider_get_cache.add(build_title(type_definition, resource_hash), resource_hash)
+          end
+        end
+          
         fetched
       end
 
